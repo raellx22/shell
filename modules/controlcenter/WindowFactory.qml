@@ -24,6 +24,7 @@ Singleton {
 
             property alias active: cc.active
             property alias navExpanded: cc.navExpanded
+            property alias subpage: cc.subpage
 
             color: Colours.tPalette.m3surface
 

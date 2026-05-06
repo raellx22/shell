@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
+install_prefix="${CAELESTIA_LAB_INSTALL_PREFIX:-/tmp/caelestia-shell-install}"
+qs_config_dir="${CAELESTIA_LAB_QS_CONFIG_DIR:-/tmp/caelestia-test}"
+xdg_root="${CAELESTIA_LAB_XDG_ROOT:-/tmp/caelestia-lab}"
+
+if [[ "${1:-}" == "--no-install" ]]; then
+    shift
+else
+    "${script_dir}/lab-install"
+fi
+
+mkdir -p "${xdg_root}/config" "${xdg_root}/state" "${xdg_root}/cache"
+
+export XDG_CONFIG_HOME="${xdg_root}/config"
+export XDG_STATE_HOME="${xdg_root}/state"
+export XDG_CACHE_HOME="${xdg_root}/cache"
+export QML2_IMPORT_PATH="${install_prefix}/usr/lib/qt6/qml${QML2_IMPORT_PATH:+:${QML2_IMPORT_PATH}}"
+export QML_IMPORT_PATH="${install_prefix}/usr/lib/qt6/qml${QML_IMPORT_PATH:+:${QML_IMPORT_PATH}}"
+export CAELESTIA_LIB_DIR="${install_prefix}/usr/lib/caelestia"
+export QS_NO_RELOAD_POPUP="${QS_NO_RELOAD_POPUP:-1}"
+export QS_DROP_EXPENSIVE_FONTS="${QS_DROP_EXPENSIVE_FONTS:-1}"
+export QSG_RENDER_LOOP="${QSG_RENDER_LOOP:-threaded}"
+export QT_QUICK_FLICKABLE_WHEEL_DECELERATION="${QT_QUICK_FLICKABLE_WHEEL_DECELERATION:-10000}"
+
+printf 'Starting lab shell from %s\n' "${qs_config_dir}"
+printf 'Using isolated config at %s/config\n' "${xdg_root}"
+
+exec qs -p "${qs_config_dir}" -v "$@"

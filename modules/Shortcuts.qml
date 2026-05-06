@@ -129,8 +129,18 @@ Scope {
     }
 
     IpcHandler {
-        function open(): void {
-            WindowFactory.create();
+        function open(pane: string): void {
+            if (pane) {
+                const parts = pane.split(":");
+                const activePane = parts[0];
+                const subpage = parts.slice(1).join(":");
+                WindowFactory.create(null, {
+                    active: activePane,
+                    subpage: subpage
+                });
+            } else {
+                WindowFactory.create();
+            }
         }
 
         target: "controlCenter"

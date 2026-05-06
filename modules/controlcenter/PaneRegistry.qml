@@ -31,6 +31,12 @@ QtObject {
             readonly property string component: "appearance/AppearancePane.qml"
         },
         QtObject {
+            readonly property string id: "personal"
+            readonly property string label: "meu"
+            readonly property string icon: "tune"
+            readonly property string component: "personal/PersonalPane.qml"
+        },
+        QtObject {
             readonly property string id: "taskbar"
             readonly property string label: "taskbar"
             readonly property string icon: "task_alt"

@@ -10,6 +10,7 @@ QtObject {
     property string active: "network"
     property int activeIndex: 0
     property bool navExpanded: false
+    property string subpage: ""
 
     readonly property BluetoothState bt: BluetoothState {}
     readonly property NetworkState network: NetworkState {}

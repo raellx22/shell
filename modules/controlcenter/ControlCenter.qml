@@ -17,6 +17,7 @@ Item {
     property alias floating: session.floating
     property alias active: session.active
     property alias navExpanded: session.navExpanded
+    property alias subpage: session.subpage
 
     readonly property bool initialOpeningComplete: panes.initialOpeningComplete
     readonly property Session session: Session {
