@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import ".."
 import "../components"
 import "binds"
+import "startup"
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
@@ -329,6 +330,8 @@ Item {
                         return monitorsComponent;
                     if (page.id === "binds")
                         return bindsComponent;
+                    if (page.id === "startup")
+                        return startupComponent;
                     return placeholderComponent;
                 }
             }
@@ -513,6 +516,8 @@ Item {
                 flickableDirection: Flickable.VerticalFlick
                 contentHeight: monitorLayout.height
 
+                Component.onCompleted: root.captureMonitorState()
+
                 StyledScrollBar.vertical: StyledScrollBar {
                     flickable: monitorFlickable
                 }
@@ -574,8 +579,6 @@ Item {
                         }
                     }
                 }
-
-                Component.onCompleted: root.captureMonitorState()
             }
 
             // ─── Popup overlay backdrop ────────────────────────────────
@@ -631,6 +634,18 @@ Item {
                 }
             }
         }
+    }
+
+    Component {
+        id: bindsComponent
+
+        BindsPage {}
+    }
+
+    Component {
+        id: startupComponent
+
+        StartupPage {}
     }
 
     component PersonalSidebar: StyledFlickable {
@@ -759,12 +774,6 @@ Item {
         readonly property var monitorList: root.monitors()
         property bool anyDragging: false
 
-        radius: Tokens.rounding.normal
-        color: Colours.layer(Colours.palette.m3surfaceContainer, 1)
-        border.color: Qt.alpha(Colours.palette.m3outline, 0.22)
-        border.width: 1
-        clip: true
-
         // Recalculate bounds considering pending positions
         function effectiveBounds(): var {
             MonitorConfig.revision;
@@ -791,6 +800,12 @@ Item {
             }
             return { minX: minX, minY: minY, width: maxX - minX, height: maxY - minY };
         }
+
+        radius: Tokens.rounding.normal
+        color: Colours.layer(Colours.palette.m3surfaceContainer, 1)
+        border.color: Qt.alpha(Colours.palette.m3outline, 0.22)
+        border.width: 1
+        clip: true
 
         Item {
             id: monitorViewport
@@ -841,8 +856,6 @@ Item {
         property point snappedLogical: Qt.point(0, 0)
         property bool isValidPosition: true
 
-        signal picked
-
         // Rest position: where the tile sits when not being dragged
         readonly property real restX: {
             MonitorConfig.revision;
@@ -854,6 +867,8 @@ Item {
             const pos = MonitorConfig.getMonitorPosition(monName);
             return (pos?.y ?? (monitorInfo.y ?? 0)) * canvasScale + canvasOffset.y;
         }
+
+        signal picked
 
         // Bind x/y to rest position only when not dragging
         onRestXChanged: if (!isDragging) x = restX
@@ -886,6 +901,7 @@ Item {
         // Snap preview ghost — shows where monitor will land
         Rectangle {
             id: snapPreview
+
             visible: monitorTile.isDragging && monitorTile.isValidPosition
             x: monitorTile.snappedLogical.x * monitorTile.canvasScale + monitorTile.canvasOffset.x - monitorTile.x
             y: monitorTile.snappedLogical.y * monitorTile.canvasScale + monitorTile.canvasOffset.y - monitorTile.y
@@ -900,6 +916,7 @@ Item {
 
         MouseArea {
             id: dragArea
+
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: monitorTile.isDragging ? Qt.ClosedHandCursor : (root.monitors().length > 1 ? Qt.OpenHandCursor : Qt.PointingHandCursor)
@@ -998,6 +1015,7 @@ Item {
         property bool selected
         property string activeOption: ""
         readonly property var monitorInfo: root.monitorData(monitor)
+        readonly property string monName: monitor.name ?? monitorInfo.name ?? ""
 
         signal picked
 
@@ -1033,8 +1051,6 @@ Item {
                 return root.positionOptions();
             return [];
         }
-
-        readonly property string monName: monitor.name ?? monitorInfo.name ?? ""
 
         function effectiveRes(): string {
             const pending = MonitorConfig.pendingValueFor(monName, "resolution");
@@ -1883,11 +1899,5 @@ Item {
                 }
             }
         }
-    }
-
-    Component {
-        id: bindsComponent
-
-        BindsPage {}
     }
 }

@@ -1,6 +1,7 @@
 # Handoff do projeto Raell Caelestia Shell
 
 Data: 2026-05-06
+Ultima atualizacao: 2026-05-06, noite
 
 Este arquivo existe para permitir que outro dev ou outra IA continue o projeto sem perder o contexto, o padrao de qualidade e as decisoes tomadas ate agora.
 
@@ -27,12 +28,24 @@ Principais arquivos alterados:
 - `modules/controlcenter/Session.qml`
 - `modules/controlcenter/WindowFactory.qml`
 - `services/Hypr.qml`
+- `modules/controlcenter/personal/PersonalPane.qml`
+- `modules/controlcenter/personal/binds/BindsPage.qml`
+- `modules/controlcenter/personal/binds/KeyboardKey.qml`
+- `modules/controlcenter/personal/binds/VirtualKeyboard.qml`
+- `services/HyprBinds.qml`
 
 Principais arquivos novos:
 
 - `modules/controlcenter/personal/PersonalPane.qml`
+- `modules/controlcenter/personal/binds/BindsPage.qml`
+- `modules/controlcenter/personal/binds/KeyboardKey.qml`
+- `modules/controlcenter/personal/binds/VirtualKeyboard.qml`
+- `modules/controlcenter/personal/startup/StartupPage.qml`
 - `services/HyprConfig.qml`
 - `services/HyprOptionsCatalog.qml`
+- `services/HyprBinds.qml`
+- `services/HyprStartup.qml`
+- `services/MonitorConfig.qml`
 - `scripts/lab-install`
 - `scripts/lab-run`
 - `RAELL_CAELESTIA_HANDOFF.md`
@@ -177,6 +190,119 @@ Chips ja preparados:
 
 Estado atual: a UI expõe e seleciona opções visualmente. O fluxo completo de preview, aplicar e rollback seguro, bem como o canvas interativo com suporte a drag-and-drop, já foram totalmente implementados e testados.
 
+### Pagina Atalhos
+
+Foi implementada a fase de atalhos baseada no Hyprmod (`hyprmod/pages/binds.py`) com uma UX propria:
+
+- teclado virtual completo em QML
+- badges por tecla indicando quantos binds usam aquela tecla
+- chips das teclas mais usadas acima do teclado
+- modo captura para pressionar uma combinacao real e abrir o editor
+- painel inferior para listar/editar atalhos da tecla selecionada
+- editor para `bind`, `binde`, `bindl`, `bindr`, `bindn`
+- suporte a desativar bind existente via `unbind`
+- persistencia em bloco gerenciado sem sobrescrever config inteira
+
+Arquivos:
+
+- `services/HyprBinds.qml`
+- `modules/controlcenter/personal/binds/BindsPage.qml`
+- `modules/controlcenter/personal/binds/VirtualKeyboard.qml`
+- `modules/controlcenter/personal/binds/KeyboardKey.qml`
+
+O servico usa:
+
+```sh
+hyprctl binds -j
+```
+
+E persiste em:
+
+```text
+${Paths.config}/hypr-user.conf
+```
+
+Marcadores:
+
+```text
+# >>> caelestia-lab managed bind settings
+# <<< caelestia-lab managed bind settings
+```
+
+Observacao importante: binds sao aplicados ao vivo via `hyprctl keyword`, porque isso e esperado e reversivel. A persistencia fica em bloco gerenciado para manter o estado apos reload.
+
+### Refinamento UX da Pagina Atalhos
+
+A primeira versao funcionava, mas visualmente ainda parecia uma lista/teclado cru. Foi refinada para o padrao das melhores dots:
+
+- topo com metricas: total de binds, teclas usadas, edits gerenciados
+- badges mudaram de vermelho agressivo para badge discreto em cores do tema
+- tecla ativa ganhou destaque mais claro
+- chips de "top keys" foram adicionados para navegacao rapida
+- estado vazio ficou mais limpo
+- botao `Novo` agora so aparece quando ha tecla selecionada
+- linhas de binds viraram cards de acao com icone, combo, tipo, origem e editar
+
+Screenshot validado:
+
+```text
+/tmp/caelestia-binds-ux-final.png
+```
+
+### Pagina Inicializacao
+
+Foi iniciado o porte do restante do Hyprmod pela parte mais logica e segura: Autostart + Env Vars.
+
+Base Hyprmod:
+
+- `/home/raell/Projetos/hyprmod/hyprmod/pages/autostart.py`
+- `/home/raell/Projetos/hyprmod/hyprmod/core/autostart.py`
+- `/home/raell/Projetos/hyprmod/hyprmod/pages/env_vars.py`
+- `/home/raell/Projetos/hyprmod/hyprmod/core/env_vars.py`
+
+Arquivos implementados:
+
+- `services/HyprStartup.qml`
+- `modules/controlcenter/personal/startup/StartupPage.qml`
+
+O que a aba faz hoje:
+
+- gerencia `exec-once`
+- gerencia `exec`
+- gerencia linhas `env = NAME,value`
+- separa visualmente Autostart e Variaveis
+- mostra metricas no topo
+- permite adicionar, editar e remover entradas
+- permite `Rodar` um comando de autostart de forma explicita
+
+Persistencia:
+
+```text
+${Paths.config}/hypr-user.conf
+```
+
+Marcadores:
+
+```text
+# >>> caelestia-lab managed startup settings
+# <<< caelestia-lab managed startup settings
+```
+
+Decisao importante: Autostart e Env Vars nao devem ser aplicados automaticamente ao vivo.
+
+Motivos:
+
+- `exec`/`exec-once` ao vivo pode abrir apps duplicados enquanto o usuario edita.
+- `env` so tem efeito real para processos criados depois, e normalmente exige nova sessao do Hyprland.
+
+Padrao correto: salvar em bloco gerenciado, avisar pelo texto da interface que vale no proximo reload/sessao, e oferecer "Rodar" apenas por clique explicito em um comando isolado.
+
+Screenshot validado:
+
+```text
+/tmp/caelestia-startup-page.png
+```
+
 ### Servico Hypr
 
 `services/Hypr.qml` recebeu:
@@ -234,19 +360,22 @@ Foi validado visualmente com screenshot:
 
 ```text
 /tmp/caelestia-lab-monitor-chips.png
+/tmp/caelestia-binds-ux-final.png
+/tmp/caelestia-startup-page.png
 ```
 
 O Control Center abriu direto em:
 
 ```sh
 qs ipc --pid 6609 call controlCenter open meu:monitors
+qs ipc --pid 103067 call controlCenter open meu:binds
+qs ipc --pid 105733 call controlCenter open meu:startup
 ```
 
-No ultimo teste havia:
+Nos testes mais recentes:
 
-- Caelestia real ativo: PID `1255`
-- lab ativo: PID `6609`
-- id do lab: `l35pajlet`
+- lab Atalhos final: PID `103067`
+- lab Inicializacao final: PID `105733`
 - config do lab: `/tmp/caelestia-test/shell.qml`
 
 O log do lab nao mostrou erro novo da nossa implementacao. Avisos conhecidos e esperados:
@@ -255,6 +384,20 @@ O log do lab nao mostrou erro novo da nossa implementacao. Avisos conhecidos e e
 - wallpaper ausente no XDG isolado
 - warnings antigos de cache/propriedade Qt
 - warnings de padding em Popup
+
+Padrao obrigatorio de validacao a cada fase:
+
+```sh
+python3 scripts/qml-lint-conventions.py
+git diff --check
+./scripts/lab-install
+./scripts/lab-run --no-install -d
+qs ipc --pid <PID_DO_LAB> call controlCenter open meu:<subpagina>
+grim /tmp/<nome-do-screenshot>.png
+tail -n 160 /run/user/1000/quickshell/by-id/<ID_DO_LAB>/log.log
+```
+
+O usuario quer validacao visual sempre que a mudanca for UX. Nao basta "compilar".
 
 ## Padrao de UX decidido
 
@@ -365,6 +508,53 @@ readonly property real restX: { /* lógica complexa */ }
 onRestXChanged: if (!isDragging) x = restX
 ```
 Isso mantém o binding ativo quando não há interação, e permite controle manual durante o `drag`.
+
+### QML lint: linha em branco antes de fechar bloco
+
+Erro encontrado durante refinamento da aba Atalhos:
+
+```text
+[blank-before-close-brace] no blank line expected before closing brace
+```
+
+Correcao: remover linha vazia antes de `}`. O script `scripts/qml-lint-conventions.py` pega isso. Sempre rode antes do lab.
+
+### Badge vermelho em informacao normal
+
+Erro de UX: os badges de teclas na aba Atalhos usavam cor de erro. Visualmente isso parecia alerta/problema, nao contagem.
+
+Correcao: usar `tertiaryContainer`/`primary` e opacidade mais baixa. Vermelho deve ficar para erro real.
+
+### Botao desativado que parece acao valida
+
+Erro de UX: na aba Atalhos, `Novo` aparecia no estado vazio mesmo sem tecla selecionada. Mesmo desativado, parecia uma acao possivel.
+
+Correcao: esconder o botao quando nao ha contexto:
+
+```qml
+visible: root.hasSelection
+enabled: root.hasSelection
+```
+
+### replaceAll / compatibilidade JS em QML
+
+Problema: usar `replaceAll` em QML/JS pode falhar dependendo do runtime.
+
+Correcao usada em `HyprBinds.qml`:
+
+```qml
+mods.replace(/ /g, " + ")
+```
+
+### Autostart e Env Vars nao sao live settings
+
+Erro conceitual a evitar: aplicar `exec`, `exec-once` ou `env` ao vivo como se fossem sliders de Hyprland.
+
+Correcao:
+
+- `exec`/`exec-once`: salvar para reload/sessao; permitir "Rodar" so por acao explicita.
+- `env`: salvar para proxima sessao; nao prometer aplicacao imediata.
+- manter texto da UI claro, mas sem virar tutorial longo.
 
 ## Referencias locais
 
@@ -533,19 +723,42 @@ Nao escrever defaults em massa. Persistir so o que o usuario alterou.
 
 ### 6. Portar o restante do Hyprmod
 
-Depois de monitores e opcoes Hyprland:
+Ja foram iniciados/concluidos:
 
 - editor de binds
+- autostart apps
+- env vars
+
+Ainda falta portar:
+
 - editor de window rules
 - editor de layer rules
-- startup apps
-- env vars
 - perfis
 - import/export
 - backups
 - temas e cursor quando fizer sentido
 
 Sempre verificar como isso aparece nas dotfiles de exemplo antes de implementar.
+
+Proximo passo mais logico: aba `Regras`, juntando `window_rules.py` e `layer_rules.py` do Hyprmod numa UX unica.
+
+Referencias Hyprmod:
+
+```text
+/home/raell/Projetos/hyprmod/hyprmod/pages/window_rules.py
+/home/raell/Projetos/hyprmod/hyprmod/core/window_rules/
+/home/raell/Projetos/hyprmod/hyprmod/pages/layer_rules.py
+/home/raell/Projetos/hyprmod/hyprmod/core/layer_rules.py
+```
+
+Padrao UX sugerido para Regras:
+
+- lista escaneavel de regras ativas
+- cards com alvo, matcher, acao e origem
+- editor em painel/bandeja, nao formulario gigante
+- locked/external rules visiveis mas protegidas, com botao para criar override gerenciado
+- buscar/filtrar por classe, titulo, workspace, layer namespace
+- preview textual da linha Hyprland antes de salvar
 
 ### 7. Testes e screenshots
 
@@ -564,6 +777,8 @@ Abrir direto em paginas especificas:
 qs ipc --pid <PID_DO_LAB> call controlCenter open meu
 qs ipc --pid <PID_DO_LAB> call controlCenter open meu:hyprland
 qs ipc --pid <PID_DO_LAB> call controlCenter open meu:monitors
+qs ipc --pid <PID_DO_LAB> call controlCenter open meu:binds
+qs ipc --pid <PID_DO_LAB> call controlCenter open meu:startup
 ```
 
 Quando possivel, usar screenshot para validar UX. O usuario especificamente quer validacao visual, nao apenas "compila".
@@ -581,7 +796,6 @@ Quando possivel, usar screenshot para validar UX. O usuario especificamente quer
 
 ## Resumo da direcao
 
-O projeto esta no caminho certo usando Caelestia como base. A infraestrutura ja foi aberta para uma aba pessoal, opcoes Hyprland, laboratorio isolado e pagina de monitores com padrao visual promissor. O salto de qualidade de transformar a aba Monitores de demonstracao interativa em configurador real, usando o fluxo seguro (preview, confirmacao, rollback, canvas interativo), foi concluido com sucesso.
+O projeto esta no caminho certo usando Caelestia como base. A infraestrutura ja foi aberta para uma aba pessoal, opcoes Hyprland, laboratorio isolado, pagina de monitores com configurador real, pagina de atalhos com teclado virtual e pagina inicial de Autostart/Env Vars.
 
-O foco agora deve se voltar para a implementacao de perfis (salvar layouts em JSON), adicionar controles avancados aos monitores (HDR, Bitdepth) e continuar portando as demais funcoes do Hyprmod (regras, atalhos, etc) mantendo este mesmo padrao de UX e arquitetura.
-
+O foco agora deve se voltar para a aba Regras (`window_rules` + `layer_rules`), perfis, import/export/backups e controles avancados de monitores. A regra principal continua: portar tudo que o Hyprmod faz, mas com UX de shell premium e validacao visual em lab antes de considerar pronto.
