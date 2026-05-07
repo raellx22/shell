@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import ".."
 import "../components"
+import "binds"
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
@@ -127,6 +128,44 @@ Item {
 
     function monitors(): var {
         return Hypr.monitors.values ?? [];
+    }
+
+    function captureMonitorState(): void {
+        MonitorConfig.captureOriginalState(monitors());
+    }
+
+    function vrrLabel(vrrValue: int): string {
+        if (vrrValue === 1)
+            return qsTr("VRR ativo");
+        if (vrrValue === 2)
+            return qsTr("VRR fullscreen");
+        return qsTr("VRR desativado");
+    }
+
+    function vrrOptions(): var {
+        return [
+            { label: qsTr("Ativar VRR"), value: 1 },
+            { label: qsTr("Apenas fullscreen"), value: 2 },
+            { label: qsTr("Desativar VRR"), value: 0 }
+        ];
+    }
+
+    function positionOptions(): var {
+        return [
+            { label: qsTr("À direita"), value: "right" },
+            { label: qsTr("À esquerda"), value: "left" },
+            { label: qsTr("Acima"), value: "above" },
+            { label: qsTr("Abaixo"), value: "below" }
+        ];
+    }
+
+    function positionLabel(pos: string): string {
+        return ({
+            right: qsTr("À direita"),
+            left: qsTr("À esquerda"),
+            above: qsTr("Acima"),
+            below: qsTr("Abaixo")
+        })[pos] ?? qsTr("Posição");
     }
 
     function monitorData(monitor: var): var {
@@ -288,6 +327,8 @@ Item {
                         return hyprOptionsComponent;
                     if (page.id === "monitors")
                         return monitorsComponent;
+                    if (page.id === "binds")
+                        return bindsComponent;
                     return placeholderComponent;
                 }
             }
@@ -459,69 +500,133 @@ Item {
     Component {
         id: monitorsComponent
 
-        StyledFlickable {
-            id: monitorFlickable
+        Item {
+            id: monitorsRoot
 
             anchors.fill: parent
 
-            flickableDirection: Flickable.VerticalFlick
-            contentHeight: monitorLayout.height
+            StyledFlickable {
+                id: monitorFlickable
 
-            StyledScrollBar.vertical: StyledScrollBar {
-                flickable: monitorFlickable
+                anchors.fill: parent
+
+                flickableDirection: Flickable.VerticalFlick
+                contentHeight: monitorLayout.height
+
+                StyledScrollBar.vertical: StyledScrollBar {
+                    flickable: monitorFlickable
+                }
+
+                ColumnLayout {
+                    id: monitorLayout
+
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    spacing: Tokens.spacing.normal
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Tokens.spacing.normal
+
+                        PageHeader {
+                            Layout.fillWidth: true
+                            title: qsTr("Monitores")
+                            icon: "display_settings"
+                            compact: true
+                        }
+
+                        IconTextButton {
+                            icon: "refresh"
+                            text: qsTr("Atualizar")
+                            type: IconTextButton.Text
+                            onClicked: {
+                                Hypr.refreshMonitors();
+                                root.captureMonitorState();
+                            }
+                        }
+                    }
+
+                    MonitorCanvas {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 260
+                    }
+
+                    Flow {
+                        id: monitorCardFlow
+
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: childrenRect.height
+                        spacing: Tokens.spacing.normal
+
+                        Repeater {
+                            model: root.monitors()
+
+                            MonitorCard {
+                                required property int index
+                                required property var modelData
+
+                                width: root.monitorCardWidth(monitorCardFlow.width)
+                                monitor: modelData
+                                selected: root.currentMonitor()?.name === modelData.name
+                                onPicked: root.activeMonitorIndex = index
+                            }
+                        }
+                    }
+                }
+
+                Component.onCompleted: root.captureMonitorState()
             }
 
-            ColumnLayout {
-                id: monitorLayout
+            // ─── Popup overlay backdrop ────────────────────────────────
+            Rectangle {
+                anchors.fill: parent
+                color: Qt.alpha(Colours.palette.m3scrim, 0.45)
+                visible: opacity > 0
+                opacity: MonitorConfig.hasPending || MonitorConfig.isPreviewing ? 1 : 0
+                z: 10
 
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.top: parent.top
-                spacing: Tokens.spacing.normal
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Tokens.spacing.normal
-
-                    PageHeader {
-                        Layout.fillWidth: true
-                        title: qsTr("Monitores")
-                        icon: "display_settings"
-                        compact: true
-                    }
-
-                    IconTextButton {
-                        icon: "refresh"
-                        text: qsTr("Atualizar")
-                        type: IconTextButton.Text
-                        onClicked: Hypr.refreshMonitors()
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: Tokens.anim.durations.normal
+                        easing.type: Easing.OutCubic
                     }
                 }
 
-                MonitorCanvas {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 260
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: {}
                 }
+            }
 
-                Flow {
-                    id: monitorCardFlow
+            // ─── Action bar popup (pending changes) ────────────────────
+            MonitorActionBar {
+                anchors.centerIn: parent
+                width: Math.min(parent.width - Tokens.padding.large * 4, 420)
+                visible: MonitorConfig.hasPending && !MonitorConfig.isPreviewing
+                z: 11
+                scale: visible ? 1.0 : 0.92
 
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: childrenRect.height
-                    spacing: Tokens.spacing.normal
+                Behavior on scale {
+                    NumberAnimation {
+                        duration: Tokens.anim.durations.normal
+                        easing.type: Easing.OutBack
+                    }
+                }
+            }
 
-                    Repeater {
-                        model: root.monitors()
+            // ─── Confirm overlay popup (preview active) ────────────────
+            MonitorConfirmOverlay {
+                anchors.centerIn: parent
+                width: Math.min(parent.width - Tokens.padding.large * 4, 460)
+                visible: MonitorConfig.isPreviewing
+                z: 11
+                scale: visible ? 1.0 : 0.92
 
-                        MonitorCard {
-                            required property int index
-                            required property var modelData
-
-                            width: root.monitorCardWidth(monitorCardFlow.width)
-                            monitor: modelData
-                            selected: root.currentMonitor()?.name === modelData.name
-                            onPicked: root.activeMonitorIndex = index
-                        }
+                Behavior on scale {
+                    NumberAnimation {
+                        duration: Tokens.anim.durations.normal
+                        easing.type: Easing.OutBack
                     }
                 }
             }
@@ -652,16 +757,45 @@ Item {
         id: canvasRoot
 
         readonly property var monitorList: root.monitors()
+        property bool anyDragging: false
 
         radius: Tokens.rounding.normal
         color: Colours.layer(Colours.palette.m3surfaceContainer, 1)
         border.color: Qt.alpha(Colours.palette.m3outline, 0.22)
         border.width: 1
+        clip: true
+
+        // Recalculate bounds considering pending positions
+        function effectiveBounds(): var {
+            MonitorConfig.revision;
+            let minX = Infinity;
+            let minY = Infinity;
+            let maxX = -Infinity;
+            let maxY = -Infinity;
+            for (const monitor of monitorList) {
+                const name = monitor?.name ?? root.monitorData(monitor)?.name ?? "";
+                const pos = MonitorConfig.getMonitorPosition(name);
+                const size = MonitorConfig.getLogicalSize(name);
+                // Fall back to live data if service has no data yet
+                const x = pos?.x ?? (root.monitorData(monitor)?.x ?? 0);
+                const y = pos?.y ?? (root.monitorData(monitor)?.y ?? 0);
+                const w = size?.w ?? root.monitorLogicalWidth(root.monitorData(monitor));
+                const h = size?.h ?? root.monitorLogicalHeight(root.monitorData(monitor));
+                minX = Math.min(minX, x);
+                minY = Math.min(minY, y);
+                maxX = Math.max(maxX, x + w);
+                maxY = Math.max(maxY, y + h);
+            }
+            if (minX === Infinity) {
+                return { minX: 0, minY: 0, width: 1920, height: 1080 };
+            }
+            return { minX: minX, minY: minY, width: maxX - minX, height: maxY - minY };
+        }
 
         Item {
             id: monitorViewport
 
-            readonly property var bounds: root.monitorBounds(canvasRoot.monitorList)
+            readonly property var bounds: canvasRoot.effectiveBounds()
             readonly property real scaleFactor: {
                 const availableWidth = Math.max(1, width - Tokens.padding.large * 2);
                 const availableHeight = Math.max(1, height - Tokens.padding.large * 2);
@@ -683,6 +817,7 @@ Item {
                     selected: root.currentMonitor()?.name === modelData.name
                     canvasScale: monitorViewport.scaleFactor
                     canvasOffset: monitorViewport.offset
+                    canvasParent: canvasRoot
                     onPicked: root.activeMonitorIndex = index
                 }
             }
@@ -695,27 +830,133 @@ Item {
         required property var monitor
         required property real canvasScale
         required property point canvasOffset
+        property StyledRect canvasParent: null
         property bool selected
         readonly property var monitorInfo: root.monitorData(monitor)
+        readonly property string monName: monitor.name ?? monitorInfo.name ?? ""
+
+        // Drag state
+        property bool isDragging: false
+        property point originalLogical: Qt.point(0, 0)
+        property point snappedLogical: Qt.point(0, 0)
+        property bool isValidPosition: true
 
         signal picked
 
-        x: (monitorInfo.x ?? 0) * canvasScale + canvasOffset.x
-        y: (monitorInfo.y ?? 0) * canvasScale + canvasOffset.y
+        // Rest position: where the tile sits when not being dragged
+        readonly property real restX: {
+            MonitorConfig.revision;
+            const pos = MonitorConfig.getMonitorPosition(monName);
+            return (pos?.x ?? (monitorInfo.x ?? 0)) * canvasScale + canvasOffset.x;
+        }
+        readonly property real restY: {
+            MonitorConfig.revision;
+            const pos = MonitorConfig.getMonitorPosition(monName);
+            return (pos?.y ?? (monitorInfo.y ?? 0)) * canvasScale + canvasOffset.y;
+        }
+
+        // Bind x/y to rest position only when not dragging
+        onRestXChanged: if (!isDragging) x = restX
+        onRestYChanged: if (!isDragging) y = restY
+        Component.onCompleted: { x = restX; y = restY; }
         width: Math.max(96, root.monitorLogicalWidth(monitorInfo) * canvasScale)
         height: Math.max(64, root.monitorLogicalHeight(monitorInfo) * canvasScale)
         radius: Tokens.rounding.small
-        color: Qt.alpha(Colours.palette.m3primaryContainer, selected ? 0.9 : hoverHandler.hovered ? 0.55 : 0.34)
-        border.color: selected ? Colours.palette.m3primary : Qt.alpha(Colours.palette.m3outline, 0.45)
-        border.width: selected ? 2 : 1
+        color: {
+            if (!isValidPosition)
+                return Qt.alpha(Colours.palette.m3errorContainer, 0.65);
+            if (isDragging)
+                return Qt.alpha(Colours.palette.m3primaryContainer, 0.95);
+            return Qt.alpha(Colours.palette.m3primaryContainer, selected ? 0.9 : dragArea.containsMouse ? 0.55 : 0.34);
+        }
+        border.color: {
+            if (!isValidPosition)
+                return Colours.palette.m3error;
+            if (isDragging)
+                return Colours.palette.m3primary;
+            return selected ? Colours.palette.m3primary : Qt.alpha(Colours.palette.m3outline, 0.45);
+        }
+        border.width: isDragging ? 3 : selected ? 2 : 1
+        z: isDragging ? 100 : (selected ? 2 : 1)
 
-        HoverHandler {
-            id: hoverHandler
+        Behavior on color {
+            CAnim {}
         }
 
-        StateLayer {
-            color: Colours.palette.m3onSurface
-            onClicked: monitorTile.picked()
+        // Snap preview ghost — shows where monitor will land
+        Rectangle {
+            id: snapPreview
+            visible: monitorTile.isDragging && monitorTile.isValidPosition
+            x: monitorTile.snappedLogical.x * monitorTile.canvasScale + monitorTile.canvasOffset.x - monitorTile.x
+            y: monitorTile.snappedLogical.y * monitorTile.canvasScale + monitorTile.canvasOffset.y - monitorTile.y
+            width: parent.width
+            height: parent.height
+            radius: Tokens.rounding.small
+            color: "transparent"
+            border.color: Colours.palette.m3primary
+            border.width: 2
+            opacity: 0.55
+        }
+
+        MouseArea {
+            id: dragArea
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: monitorTile.isDragging ? Qt.ClosedHandCursor : (root.monitors().length > 1 ? Qt.OpenHandCursor : Qt.PointingHandCursor)
+            drag.target: root.monitors().length > 1 ? monitorTile : null
+            drag.axis: Drag.XAndYAxis
+            drag.threshold: 0
+
+            onPressed: mouse => {
+                monitorTile.picked();
+                if (root.monitors().length <= 1) return;
+                monitorTile.isDragging = true;
+                if (canvasParent) canvasParent.anyDragging = true;
+                const pos = MonitorConfig.getMonitorPosition(monitorTile.monName);
+                monitorTile.originalLogical = Qt.point(pos.x, pos.y);
+                monitorTile.snappedLogical = monitorTile.originalLogical;
+                monitorTile.isValidPosition = true;
+            }
+
+            onPositionChanged: mouse => {
+                if (!monitorTile.isDragging) return;
+                // Convert pixel position back to logical coordinates
+                const logX = Math.round((monitorTile.x - monitorTile.canvasOffset.x) / monitorTile.canvasScale);
+                const logY = Math.round((monitorTile.y - monitorTile.canvasOffset.y) / monitorTile.canvasScale);
+                const size = MonitorConfig.getLogicalSize(monitorTile.monName);
+                const snapped = MonitorConfig.snapToEdges(monitorTile.monName, logX, logY, size.w, size.h);
+                monitorTile.snappedLogical = Qt.point(snapped.x, snapped.y);
+                monitorTile.isValidPosition = !MonitorConfig.checkOverlap(monitorTile.monName, snapped.x, snapped.y, size.w, size.h);
+            }
+
+            onReleased: {
+                if (!monitorTile.isDragging) return;
+                monitorTile.isDragging = false;
+                if (canvasParent) canvasParent.anyDragging = false;
+
+                if (root.monitors().length <= 1) return;
+
+                const finalX = monitorTile.snappedLogical.x;
+                const finalY = monitorTile.snappedLogical.y;
+
+                // Check overlap at final position — if overlapping, revert
+                const size = MonitorConfig.getLogicalSize(monitorTile.monName);
+                if (MonitorConfig.checkOverlap(monitorTile.monName, finalX, finalY, size.w, size.h)) {
+                    monitorTile.isValidPosition = true;
+                    return;
+                }
+
+                // Only commit if position actually changed
+                if (finalX === monitorTile.originalLogical.x && finalY === monitorTile.originalLogical.y)
+                    return;
+
+                MonitorConfig.setDragPosition(monitorTile.monName, finalX, finalY);
+            }
+
+            onClicked: {
+                if (!monitorTile.isDragging)
+                    monitorTile.picked();
+            }
         }
 
         ColumnLayout {
@@ -726,9 +967,9 @@ Item {
             MaterialIcon {
                 Layout.alignment: Qt.AlignHCenter
                 text: "desktop_windows"
-                color: Colours.palette.m3primary
+                color: isDragging ? Colours.palette.m3primary : (isValidPosition ? Colours.palette.m3primary : Colours.palette.m3error)
                 font.pointSize: Tokens.font.size.large
-                fill: selected ? 1 : 0
+                fill: selected || isDragging ? 1 : 0
             }
 
             StyledText {
@@ -767,7 +1008,8 @@ Item {
                 scale: qsTr("Escala"),
                 transform: qsTr("Orientação"),
                 workspace: qsTr("Workspace ativo"),
-                vrr: qsTr("VRR")
+                vrr: qsTr("VRR"),
+                position: qsTr("Posição relativa ao principal")
             })[activeOption] ?? "";
         }
 
@@ -786,29 +1028,60 @@ Item {
                     value: monitorInfo.activeWorkspace?.name ?? ""
                 }];
             if (activeOption === "vrr")
-                return [{
-                    label: qsTr("Ligado"),
-                    value: true
-                }, {
-                    label: qsTr("Desligado"),
-                    value: false
-                }];
+                return root.vrrOptions();
+            if (activeOption === "position")
+                return root.positionOptions();
             return [];
         }
 
+        readonly property string monName: monitor.name ?? monitorInfo.name ?? ""
+
+        function effectiveRes(): string {
+            const pending = MonitorConfig.pendingValueFor(monName, "resolution");
+            return pending ?? `${root.monitorLogicalWidth(monitorInfo)} x ${root.monitorLogicalHeight(monitorInfo)}`;
+        }
+
+        function effectiveRefresh(): string {
+            const pending = MonitorConfig.pendingValueFor(monName, "refresh");
+            return pending ?? root.formatRefresh(monitorInfo.refreshRate);
+        }
+
+        function effectiveScale(): var {
+            const pending = MonitorConfig.pendingValueFor(monName, "scale");
+            return pending ?? (monitorInfo.scale ?? 1);
+        }
+
+        function effectiveTransform(): int {
+            const pending = MonitorConfig.pendingValueFor(monName, "transform");
+            return pending !== null ? Number(pending) : (monitorInfo.transform ?? 0);
+        }
+
+        function effectiveVrr(): int {
+            const pending = MonitorConfig.pendingValueFor(monName, "vrr");
+            return pending !== null ? Number(pending) : (monitorInfo.vrr ?? 0);
+        }
+
+        function effectivePosition(): string {
+            const pending = MonitorConfig.pendingValueFor(monName, "relativePosition");
+            return pending ?? "";
+        }
+
         function isCurrentOption(value: var): bool {
+            MonitorConfig.revision;
             if (activeOption === "resolution")
-                return value === `${root.monitorLogicalWidth(monitorInfo)} x ${root.monitorLogicalHeight(monitorInfo)}`;
+                return value === effectiveRes();
             if (activeOption === "refresh")
-                return value === root.formatRefresh(monitorInfo.refreshRate);
+                return value === effectiveRefresh();
             if (activeOption === "scale")
-                return Number(value) === Number(monitorInfo.scale ?? 1);
+                return Number(value) === Number(effectiveScale());
             if (activeOption === "transform")
-                return Number(value) === Number(monitorInfo.transform ?? 0);
+                return Number(value) === effectiveTransform();
             if (activeOption === "workspace")
                 return value === (monitorInfo.activeWorkspace?.name ?? "");
             if (activeOption === "vrr")
-                return Boolean(value) === Boolean(monitorInfo.vrr);
+                return Number(value) === effectiveVrr();
+            if (activeOption === "position")
+                return value === effectivePosition();
             return false;
         }
 
@@ -865,28 +1138,32 @@ Item {
             StatusChip {
                 icon: "straighten"
                 active: monitorCard.activeOption === "resolution"
-                text: `${root.monitorLogicalWidth(monitorInfo)} x ${root.monitorLogicalHeight(monitorInfo)}`
+                pending: MonitorConfig.hasPendingFor(monitorCard.monName, "resolution")
+                text: monitorCard.effectiveRes()
                 onClicked: monitorCard.toggleOption("resolution")
             }
 
             StatusChip {
                 icon: "speed"
                 active: monitorCard.activeOption === "refresh"
-                text: root.formatRefresh(monitorInfo.refreshRate)
+                pending: MonitorConfig.hasPendingFor(monitorCard.monName, "refresh")
+                text: monitorCard.effectiveRefresh()
                 onClicked: monitorCard.toggleOption("refresh")
             }
 
             StatusChip {
                 icon: "zoom_out_map"
                 active: monitorCard.activeOption === "scale"
-                text: `${monitorInfo.scale ?? 1}x`
+                pending: MonitorConfig.hasPendingFor(monitorCard.monName, "scale")
+                text: `${monitorCard.effectiveScale()}x`
                 onClicked: monitorCard.toggleOption("scale")
             }
 
             StatusChip {
                 icon: "screen_rotation"
                 active: monitorCard.activeOption === "transform"
-                text: root.transformName(monitorInfo.transform ?? 0)
+                pending: MonitorConfig.hasPendingFor(monitorCard.monName, "transform")
+                text: root.transformName(monitorCard.effectiveTransform())
                 onClicked: monitorCard.toggleOption("transform")
             }
 
@@ -898,10 +1175,30 @@ Item {
             }
 
             StatusChip {
+                visible: root.monitors().length > 1 && MonitorConfig.primaryMonitor !== monitorCard.monName
+                icon: monitorCard.effectivePosition() ? "swap_horiz" : "open_with"
+                active: monitorCard.activeOption === "position"
+                pending: MonitorConfig.hasPendingFor(monitorCard.monName, "relativePosition")
+                text: monitorCard.effectivePosition() ? root.positionLabel(monitorCard.effectivePosition()) : qsTr("Posição")
+                onClicked: monitorCard.toggleOption("position")
+            }
+
+            StatusChip {
                 active: monitorCard.activeOption === "vrr"
-                icon: monitorInfo.vrr ? "sync" : "sync_disabled"
-                text: monitorInfo.vrr ? qsTr("VRR") : qsTr("sem VRR")
+                pending: MonitorConfig.hasPendingFor(monitorCard.monName, "vrr")
+                icon: monitorCard.effectiveVrr() === 1 ? "sync" : monitorCard.effectiveVrr() === 2 ? "sync_lock" : "sync_disabled"
+                text: root.vrrLabel(monitorCard.effectiveVrr())
+                accentColor: monitorCard.effectiveVrr() === 1 ? Colours.palette.m3primary : monitorCard.effectiveVrr() === 2 ? Colours.palette.m3tertiary : Colours.palette.m3outline
                 onClicked: monitorCard.toggleOption("vrr")
+            }
+
+            StatusChip {
+                visible: root.monitors().length > 1
+                icon: MonitorConfig.primaryMonitor === monitorCard.monName ? "star" : "star_outline"
+                active: MonitorConfig.primaryMonitor === monitorCard.monName
+                text: MonitorConfig.primaryMonitor === monitorCard.monName ? qsTr("Principal") : qsTr("Definir principal")
+                accentColor: Colours.palette.m3tertiary
+                onClicked: MonitorConfig.setPrimaryMonitor(monitorCard.monName)
             }
         }
 
@@ -911,6 +1208,8 @@ Item {
             items: monitorCard.optionItems()
             visible: monitorCard.activeOption !== ""
             currentTest: value => monitorCard.isCurrentOption(value)
+            monitorName: monitorCard.monName
+            optionField: monitorCard.activeOption
         }
 
         ColumnLayout {
@@ -940,13 +1239,23 @@ Item {
         required property string icon
         required property string text
         property bool active
+        property bool pending: false
+        property color accentColor: Colours.palette.m3primaryContainer
 
         signal clicked
 
         implicitWidth: chipRow.implicitWidth + Tokens.padding.normal * 2
         implicitHeight: chipRow.implicitHeight + Tokens.padding.small * 2
         radius: Tokens.rounding.full
-        color: active ? Qt.alpha(Colours.palette.m3primaryContainer, 0.92) : hoverHandler.hovered ? Colours.layer(Colours.palette.m3surfaceContainer, 3) : Colours.layer(Colours.palette.m3surfaceContainer, 2)
+        color: pending
+            ? Qt.alpha(Colours.palette.m3tertiaryContainer, active ? 0.92 : 0.65)
+            : active
+                ? Qt.alpha(accentColor, 0.92)
+                : hoverHandler.hovered
+                    ? Colours.layer(Colours.palette.m3surfaceContainer, 3)
+                    : Colours.layer(Colours.palette.m3surfaceContainer, 2)
+        border.color: pending ? Qt.alpha(Colours.palette.m3tertiary, 0.6) : "transparent"
+        border.width: pending ? 1 : 0
 
         HoverHandler {
             id: hoverHandler
@@ -964,20 +1273,41 @@ Item {
             anchors.centerIn: parent
             spacing: Tokens.spacing.small
 
+            Rectangle {
+                visible: statusChip.pending
+                width: 6
+                height: 6
+                radius: 3
+                color: Colours.palette.m3tertiary
+            }
+
             MaterialIcon {
                 text: statusChip.icon
-                color: statusChip.active ? Colours.palette.m3onPrimaryContainer : Colours.palette.m3primary
+                color: statusChip.pending
+                    ? Colours.palette.m3onTertiaryContainer
+                    : statusChip.active
+                        ? Colours.palette.m3onPrimaryContainer
+                        : Colours.palette.m3primary
                 font.pointSize: Tokens.font.size.small
             }
 
             StyledText {
                 text: statusChip.text
-                color: statusChip.active ? Colours.palette.m3onPrimaryContainer : Colours.palette.m3onSurfaceVariant
+                color: statusChip.pending
+                    ? Colours.palette.m3onTertiaryContainer
+                    : statusChip.active
+                        ? Colours.palette.m3onPrimaryContainer
+                        : Colours.palette.m3onSurfaceVariant
                 font.pointSize: Tokens.font.size.small
+                font.weight: statusChip.pending ? 600 : 400
             }
         }
 
         Behavior on color {
+            CAnim {}
+        }
+
+        Behavior on border.color {
             CAnim {}
         }
     }
@@ -988,9 +1318,17 @@ Item {
         required property string title
         property var items: []
         property var currentTest: null
+        property string monitorName: ""
+        property string optionField: ""
 
         function isCurrent(value: var): bool {
             return currentTest ? currentTest(value) : false;
+        }
+
+        function handleOptionSelected(value: var): void {
+            if (monitorName && optionField && optionField !== "workspace") {
+                MonitorConfig.setPending(monitorName, optionField, value);
+            }
         }
 
         implicitHeight: optionTrayLayout.implicitHeight + Tokens.padding.normal * 2
@@ -1039,6 +1377,7 @@ Item {
                         checked: optionTray.isCurrent(modelData.value)
                         toggle: false
                         type: checked ? TextButton.Filled : TextButton.Tonal
+                        onClicked: optionTray.handleOptionSelected(modelData.value)
                     }
                 }
             }
@@ -1344,5 +1683,211 @@ Item {
                 }
             }
         }
+    }
+
+    component MonitorActionBar: StyledRect {
+        id: actionBar
+
+        implicitHeight: actionBarLayout.implicitHeight + Tokens.padding.large * 2
+        radius: Tokens.rounding.large
+        color: Colours.layer(Colours.palette.m3surfaceContainer, 2)
+        border.color: Qt.alpha(Colours.palette.m3tertiary, 0.35)
+        border.width: 1
+        opacity: visible ? 1 : 0
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: Tokens.anim.durations.normal
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        ColumnLayout {
+            id: actionBarLayout
+
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.margins: Tokens.padding.large
+            spacing: Tokens.spacing.large
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Tokens.spacing.normal
+
+                MaterialIcon {
+                    text: "info"
+                    color: Colours.palette.m3tertiary
+                    font.pointSize: Tokens.font.size.extraLarge
+                    fill: 1
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 2
+
+                    StyledText {
+                        Layout.fillWidth: true
+                        text: qsTr("Mudanças pendentes")
+                        font.pointSize: Tokens.font.size.normal
+                        font.weight: 600
+                    }
+
+                    StyledText {
+                        Layout.fillWidth: true
+                        text: qsTr("Aplique o preview para testar ou descarte para cancelar.")
+                        color: Colours.palette.m3outline
+                        font.pointSize: Tokens.font.size.small
+                        wrapMode: Text.WordWrap
+                    }
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignRight
+                spacing: Tokens.spacing.normal
+
+                IconTextButton {
+                    icon: "close"
+                    text: qsTr("Descartar")
+                    type: IconTextButton.Text
+                    onClicked: MonitorConfig.revertChanges()
+                }
+
+                IconTextButton {
+                    icon: "play_arrow"
+                    text: qsTr("Aplicar preview")
+                    type: IconTextButton.Filled
+                    onClicked: MonitorConfig.applyPreview(root.monitors())
+                }
+            }
+        }
+    }
+
+    component MonitorConfirmOverlay: StyledRect {
+        id: confirmOverlay
+
+        implicitHeight: confirmLayout.implicitHeight + Tokens.padding.large * 2
+        radius: Tokens.rounding.normal
+        color: Colours.layer(Colours.palette.m3surfaceContainer, 2)
+        border.color: Qt.alpha(Colours.palette.m3primary, 0.45)
+        border.width: 2
+        opacity: visible ? 1 : 0
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: Tokens.anim.durations.normal
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        ColumnLayout {
+            id: confirmLayout
+
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.margins: Tokens.padding.large
+            spacing: Tokens.spacing.large
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Tokens.spacing.normal
+
+                // Countdown circle
+                Item {
+                    Layout.preferredWidth: 48
+                    Layout.preferredHeight: 48
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: width / 2
+                        color: "transparent"
+                        border.color: Qt.alpha(Colours.palette.m3outline, 0.25)
+                        border.width: 3
+                    }
+
+                    // Progress arc background
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: width / 2
+                        color: "transparent"
+                        border.color: Colours.palette.m3primary
+                        border.width: 3
+                        opacity: MonitorConfig.confirmCountdown / MonitorConfig.confirmTimeout
+
+                        Behavior on opacity {
+                            NumberAnimation {
+                                duration: 900
+                                easing.type: Easing.Linear
+                            }
+                        }
+                    }
+
+                    StyledText {
+                        anchors.centerIn: parent
+                        text: MonitorConfig.confirmCountdown.toString()
+                        font.pointSize: Tokens.font.size.large
+                        font.weight: 700
+                        color: MonitorConfig.confirmCountdown <= 5 ? Colours.palette.m3error : Colours.palette.m3primary
+
+                        Behavior on color {
+                            CAnim {}
+                        }
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 2
+
+                    StyledText {
+                        Layout.fillWidth: true
+                        text: qsTr("Confirmar configuração?")
+                        font.pointSize: Tokens.font.size.normal
+                        font.weight: 600
+                    }
+
+                    StyledText {
+                        Layout.fillWidth: true
+                        text: qsTr("A tela voltará ao normal em %1 segundos se não confirmar.").arg(MonitorConfig.confirmCountdown)
+                        color: MonitorConfig.confirmCountdown <= 5 ? Colours.palette.m3error : Colours.palette.m3outline
+                        font.pointSize: Tokens.font.size.small
+                        wrapMode: Text.WordWrap
+
+                        Behavior on color {
+                            CAnim {}
+                        }
+                    }
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignRight
+                spacing: Tokens.spacing.normal
+
+                IconTextButton {
+                    icon: "undo"
+                    text: qsTr("Reverter agora")
+                    type: IconTextButton.Text
+                    onClicked: MonitorConfig.revertChanges()
+                }
+
+                IconTextButton {
+                    icon: "check_circle"
+                    text: qsTr("Confirmar")
+                    type: IconTextButton.Filled
+                    onClicked: MonitorConfig.confirmChanges()
+                }
+            }
+        }
+    }
+
+    Component {
+        id: bindsComponent
+
+        BindsPage {}
     }
 }
