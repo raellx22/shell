@@ -175,7 +175,7 @@ Chips ja preparados:
 - workspace
 - VRR
 
-Estado atual: a UI ja expoe e seleciona opcoes visualmente, mas ainda nao aplica mudancas reais via `hyprctl`. A proxima fase e implementar preview, aplicar e rollback.
+Estado atual: a UI expõe e seleciona opções visualmente. O fluxo completo de preview, aplicar e rollback seguro, bem como o canvas interativo com suporte a drag-and-drop, já foram totalmente implementados e testados.
 
 ### Servico Hypr
 
@@ -352,7 +352,19 @@ Correcao: para clique em cards desse tipo, usar `TapHandler` ou colocar overlay 
 
 Nao aplicar configuracao de monitor direto no clique. Configuracao de monitor pode deixar o usuario sem imagem ou com layout ruim.
 
-Padrao correto: preview temporario, modal de confirmar, timer de rollback. A referencia principal para isso e o DankMaterialShell.
+Padrao correto: preview temporario, modal de confirmar, timer de rollback. A referencia principal para isso e o DankMaterialShell. Foi implementado usando `MonitorConfig.qml`.
+
+### Erro de Sintaxe QML com Ternário e Bloco de Código
+
+Erro: Usar `x: isDragging ? x : { ... }` para quebrar um property binding.
+Motivo: A sintaxe QML não permite um bloco de código direto no ramo de um operador ternário em uma declaração de propriedade, resultando em erro `Expected token ','`.
+
+Solução (Modo Idiomático QML):
+```qml
+readonly property real restX: { /* lógica complexa */ }
+onRestXChanged: if (!isDragging) x = restX
+```
+Isso mantém o binding ativo quando não há interação, e permite controle manual durante o `drag`.
 
 ## Referencias locais
 
@@ -452,54 +464,22 @@ Uso:
 
 ## Como continuar
 
-### 1. Implementar pipeline seguro de monitores
+### 1. Monitor Pipeline e Canvas (Concluído)
 
-Esta e a proxima prioridade.
+A Fase 1 (Pipeline seguro), Fase 1.5 (Polimento) e Fase 2 (Canvas Arrastável) foram totalmente concluídas.
 
-Criar um servico dedicado, por exemplo:
+**O que foi feito:**
+- Serviço `MonitorConfig.qml` gerencia `originalState` e `pendingChanges`.
+- Preview temporário via `hyprctl --batch` e timer de 20s para rollback.
+- Confirmação persiste configurações em `hypr-monitors.conf` usando marcadores.
+- `PersonalPane.qml` ganhou modais bloqueantes centralizados (com backdrop) para "Mudanças Pendentes" e "Confirmar".
+- Canvas arrastável (MonitorCanvas e MonitorTile) usando `MouseArea`.
+- Lógica de snap nas bordas (Perimeter Glue inspirado no Ilyamiro e Dank) e prevenção de sobreposição de displays.
+- Animação de monitor focado.
 
-```text
-services/MonitorConfig.qml
-```
-
-Responsabilidades:
-
-- ler monitores atuais via `hyprctl monitors -j`
-- manter estado atual e estado pendente
-- construir comandos `hyprctl keyword monitor ...`
-- aplicar preview temporario
-- abrir confirmacao com timer
-- reverter automaticamente se o usuario nao confirmar
-- persistir apenas apos confirmacao
-
-Base de referencia:
-
-```text
-/home/raell/Projetos/dotfiles_exemplos/DankMaterialShell/quickshell/Modules/Settings/DisplayConfig/DisplayConfigState.qml
-/home/raell/Projetos/dotfiles_exemplos/DankMaterialShell/quickshell/Modules/Settings/DisplayConfig/HyprlandOutputSettings.qml
-```
-
-Nao inventar tudo de cabeca: leia a referencia do Dank antes.
-
-### 2. Tornar o canvas de monitores arrastavel
-
-Hoje o canvas e visual. A proxima fase e permitir mover monitores.
-
-Requisitos:
-
-- drag por monitor
-- snap nas bordas
-- escala visual correta para resolucoes diferentes
-- detectar sobreposicao
-- mostrar posicao final
-- aplicar somente via preview seguro
-
-Referencia:
-
-```text
-/home/raell/Projetos/dotfiles_exemplos/DankMaterialShell/quickshell/Modules/Settings/DisplayConfig/MonitorCanvas.qml
-/home/raell/Projetos/dotfiles_exemplos/DankMaterialShell/quickshell/Modules/Settings/DisplayConfig/MonitorRect.qml
-```
+**Proximos Passos Reais (Fase 3+):**
+- Adicionar controles avançados aos monitores (HDR, Bitdepth).
+- Implementar perfis de monitor (salvar/carregar layouts salvos em JSON).
 
 ### 3. Completar controles por monitor
 
@@ -601,5 +581,7 @@ Quando possivel, usar screenshot para validar UX. O usuario especificamente quer
 
 ## Resumo da direcao
 
-O projeto esta no caminho certo usando Caelestia como base. A infraestrutura ja foi aberta para uma aba pessoal, opcoes Hyprland, laboratorio isolado e pagina de monitores com padrao visual promissor. O proximo salto de qualidade e transformar a aba Monitores de demonstracao interativa em configurador real, usando o fluxo seguro do DankMaterialShell como referencia: preview, confirmacao e rollback.
+O projeto esta no caminho certo usando Caelestia como base. A infraestrutura ja foi aberta para uma aba pessoal, opcoes Hyprland, laboratorio isolado e pagina de monitores com padrao visual promissor. O salto de qualidade de transformar a aba Monitores de demonstracao interativa em configurador real, usando o fluxo seguro (preview, confirmacao, rollback, canvas interativo), foi concluido com sucesso.
+
+O foco agora deve se voltar para a implementacao de perfis (salvar layouts em JSON), adicionar controles avancados aos monitores (HDR, Bitdepth) e continuar portando as demais funcoes do Hyprmod (regras, atalhos, etc) mantendo este mesmo padrao de UX e arquitetura.
 
