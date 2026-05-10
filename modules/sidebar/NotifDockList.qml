@@ -12,7 +12,6 @@ LazyListView {
 
     required property Props props
     required property Flickable container
-    required property DrawerVisibilities visibilities
 
     anchors.left: parent?.left
     anchors.right: parent?.right
@@ -122,7 +121,6 @@ LazyListView {
                 modelData: notif.modelData
                 props: root.props
                 container: root.container
-                visibilities: root.visibilities
             }
 
             Behavior on y {

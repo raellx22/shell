@@ -73,6 +73,9 @@ ColumnLayout {
             popouts.currentName = id.toLowerCase();
             popouts.currentCenter = (ch.item as Item).mapToItem(root, 0, (ch.item as Item).implicitHeight / 2).y ?? 0;
             popouts.hasCurrent = true;
+        } else if (id === "power" && popouts.currentName === "power") {
+            popouts.currentCenter = Qt.binding(() => ch.mapToItem(root, 0, ch.implicitHeight / 2).y);
+            popouts.hasCurrent = true;
         }
     }
 
@@ -169,7 +172,8 @@ ColumnLayout {
                 roleValue: "power"
                 delegate: WrappedLoader {
                     sourceComponent: Power {
-                        visibilities: root.visibilities
+                        bar: root
+                        popouts: root.popouts
                     }
                 }
             }

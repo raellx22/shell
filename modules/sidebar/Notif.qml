@@ -13,7 +13,6 @@ StyledRect {
     required property NotifData modelData
     required property Props props
     required property bool expanded
-    required property DrawerVisibilities visibilities
 
     readonly property StyledText body: (expandedContent.item as ExpandedBody)?.body ?? null
     readonly property real nonAnimHeight: expanded ? summary.implicitHeight + expandedContent.implicitHeight + expandedContent.anchors.topMargin + Tokens.padding.normal * 2 : summaryHeightMetrics.height
@@ -144,7 +143,6 @@ StyledRect {
 
             onLinkActivated: link => {
                 Quickshell.execDetached(["app2unit", "-O", "--", link]);
-                root.visibilities.sidebar = false;
             }
         }
 

@@ -2,7 +2,9 @@ pragma ComponentBehavior: Bound
 
 import ".."
 import "../components"
+import "animations"
 import "binds"
+import "rules"
 import "startup"
 import QtQuick
 import QtQuick.Layouts
@@ -38,6 +40,11 @@ Item {
             id: "hyprland",
             label: qsTr("Hyprland"),
             icon: "tune"
+        },
+        {
+            id: "animations",
+            label: qsTr("Animações"),
+            icon: "animation"
         },
         {
             id: "monitors",
@@ -326,10 +333,14 @@ Item {
                         return overviewComponent;
                     if (page.id === "hyprland")
                         return hyprOptionsComponent;
+                    if (page.id === "animations")
+                        return animationsComponent;
                     if (page.id === "monitors")
                         return monitorsComponent;
                     if (page.id === "binds")
                         return bindsComponent;
+                    if (page.id === "rules")
+                        return rulesComponent;
                     if (page.id === "startup")
                         return startupComponent;
                     return placeholderComponent;
@@ -376,7 +387,7 @@ Item {
                     }
 
                     MediaPathRow {
-                        title: qsTr("GIF do dashboard")
+                        title: qsTr("GIF do perfil")
                         value: root.mediaGif
                         fallbackValue: root.defaultMediaGif
                         onAccepted: path => root.saveMediaGif(path)
@@ -640,6 +651,18 @@ Item {
         id: bindsComponent
 
         BindsPage {}
+    }
+
+    Component {
+        id: animationsComponent
+
+        AnimationsPage {}
+    }
+
+    Component {
+        id: rulesComponent
+
+        RulesPage {}
     }
 
     Component {

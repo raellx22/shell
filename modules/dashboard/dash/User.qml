@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Layouts
 import Caelestia.Config
 import qs.components
 import qs.components.effects
@@ -7,48 +8,99 @@ import qs.components.images
 import qs.services
 import qs.utils
 
-Row {
+Item {
     id: root
 
     required property DrawerVisibilities visibilities
     required property FileDialog facePicker
+    readonly property string defaultProfileGif: "root:/assets/bongocat.gif"
+    readonly property string profileGif: Config.paths.mediaGif ?? ""
+    readonly property bool useAnimatedProfile: profileGif.length > 0 && profileGif !== defaultProfileGif
 
-    padding: Tokens.padding.large
-    spacing: Tokens.spacing.normal
+    implicitWidth: 268
+    implicitHeight: 118
 
     StyledClippingRect {
-        implicitWidth: info.implicitHeight
-        implicitHeight: info.implicitHeight
+        id: avatar
+
+        anchors.left: parent.left
+        anchors.verticalCenter: parent.verticalCenter
+
+        implicitWidth: 104
+        implicitHeight: 104
 
         radius: Tokens.rounding.large
         color: Colours.layer(Colours.palette.m3surfaceContainerHigh, 2)
 
-        MaterialIcon {
-            anchors.centerIn: parent
+        StyledRect {
+            anchors.fill: parent
+            anchors.margins: 1
 
-            text: "person"
-            fill: 1
-            grade: 200
-            font.pointSize: Math.floor(info.implicitHeight / 2) || 1
-            visible: pfp.status !== Image.Ready
+            radius: parent.radius - 1
+            color: Qt.alpha(Colours.palette.m3primary, root.useAnimatedProfile ? 0.10 : 0.05)
         }
 
-        CachingImage {
-            id: pfp
+        StyledClippingRect {
+            id: mediaFrame
 
+            anchors.margins: Tokens.padding.smaller
             anchors.fill: parent
-            path: `${Paths.home}/.face`
+
+            radius: avatar.radius - Tokens.padding.smaller
+            color: Colours.layer(Colours.palette.m3surfaceContainerHighest, 2)
+
+            MaterialIcon {
+                anchors.centerIn: parent
+
+                text: "person"
+                fill: 1
+                grade: 200
+                color: Colours.palette.m3outline
+                font.pointSize: Tokens.font.size.extraLarge * 2
+                visible: !root.useAnimatedProfile && pfp.status !== Image.Ready
+            }
+
+            AnimatedImage {
+                id: profileGifImage
+
+                anchors.fill: parent
+
+                visible: root.useAnimatedProfile
+                playing: visible
+                source: visible ? Paths.absolutePath(root.profileGif) : ""
+                asynchronous: true
+                cache: false
+                fillMode: AnimatedImage.PreserveAspectCrop
+            }
+
+            CachingImage {
+                id: pfp
+
+                anchors.fill: parent
+
+                visible: !root.useAnimatedProfile
+                path: `${Paths.home}/.face`
+                fillMode: Image.PreserveAspectCrop
+            }
         }
 
         MouseArea {
+            id: avatarMouse
+
             anchors.fill: parent
             hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: {
+                root.visibilities.launcher = false;
+                root.facePicker.open();
+            }
 
             StyledRect {
                 anchors.fill: parent
 
-                color: Qt.alpha(Colours.palette.m3scrim, 0.5)
-                opacity: parent.containsMouse ? 1 : 0
+                radius: avatar.radius
+                color: Qt.alpha(Colours.palette.m3scrim, 0.46)
+                opacity: avatarMouse.containsMouse ? 1 : 0
 
                 Behavior on opacity {
                     Anim {
@@ -57,34 +109,38 @@ Row {
                 }
             }
 
-            StyledRect {
+            ColumnLayout {
                 anchors.centerIn: parent
+                spacing: Tokens.spacing.smaller
 
-                implicitWidth: selectIcon.implicitHeight + Tokens.padding.small * 2
-                implicitHeight: selectIcon.implicitHeight + Tokens.padding.small * 2
+                scale: avatarMouse.containsMouse ? 1 : 0.86
+                opacity: avatarMouse.containsMouse ? 1 : 0
 
-                radius: Tokens.rounding.normal
-                color: Colours.palette.m3primary
-                scale: parent.containsMouse ? 1 : 0.5
-                opacity: parent.containsMouse ? 1 : 0
+                StyledRect {
+                    Layout.alignment: Qt.AlignHCenter
+                    implicitWidth: 44
+                    implicitHeight: 44
+                    radius: Tokens.rounding.full
+                    color: Colours.palette.m3primary
 
-                StateLayer {
-                    color: Colours.palette.m3onPrimary
-                    onClicked: {
-                        root.visibilities.launcher = false;
-                        root.facePicker.open();
+                    MaterialIcon {
+                        id: selectIcon
+
+                        anchors.centerIn: parent
+                        anchors.horizontalCenterOffset: -font.pointSize * 0.02
+
+                        text: "add_photo_alternate"
+                        color: Colours.palette.m3onPrimary
+                        font.pointSize: Tokens.font.size.large
                     }
                 }
 
-                MaterialIcon {
-                    id: selectIcon
-
-                    anchors.centerIn: parent
-                    anchors.horizontalCenterOffset: -font.pointSize * 0.02
-
-                    text: "frame_person"
+                StyledText {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: qsTr("Trocar")
                     color: Colours.palette.m3onPrimary
-                    font.pointSize: Tokens.font.size.extraLarge
+                    font.pointSize: Tokens.font.size.smaller
+                    font.weight: 600
                 }
 
                 Behavior on scale {
@@ -102,41 +158,28 @@ Row {
         }
     }
 
-    Column {
+    ColumnLayout {
         id: info
 
+        anchors.left: avatar.right
+        anchors.leftMargin: Tokens.spacing.normal
+        anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
-        spacing: Tokens.spacing.normal
+        spacing: Tokens.spacing.small
 
-        Item {
-            id: line
+        StyledText {
+            Layout.preferredWidth: info.width
+            text: SysInfo.user || qsTr("Usuario")
+            color: Colours.palette.m3onSurface
+            font.pointSize: Tokens.font.size.large
+            font.weight: 600
+            elide: Text.ElideRight
+        }
 
-            implicitWidth: icon.implicitWidth + text.width + text.anchors.leftMargin
-            implicitHeight: Math.max(icon.implicitHeight, text.implicitHeight)
-
-            ColouredIcon {
-                id: icon
-
-                anchors.left: parent.left
-                anchors.leftMargin: (Tokens.sizes.dashboard.infoIconSize - implicitWidth) / 2
-
-                source: SysInfo.osLogo
-                implicitSize: Math.floor(Tokens.font.size.normal * 1.34)
-                colour: Colours.palette.m3primary
-            }
-
-            StyledText {
-                id: text
-
-                anchors.verticalCenter: icon.verticalCenter
-                anchors.left: icon.right
-                anchors.leftMargin: icon.anchors.leftMargin
-                text: `:  ${SysInfo.osPrettyName || SysInfo.osName}`
-                font.pointSize: Tokens.font.size.normal
-
-                width: Tokens.sizes.dashboard.infoWidth
-                elide: Text.ElideRight
-            }
+        InfoLine {
+            iconSource: SysInfo.osLogo
+            text: SysInfo.osPrettyName || SysInfo.osName
+            colour: Colours.palette.m3primary
         }
 
         InfoLine {
@@ -157,35 +200,57 @@ Row {
     component InfoLine: Item {
         id: line
 
-        required property string icon
+        property string icon: ""
+        property string iconSource: ""
         required property string text
         required property color colour
 
-        implicitWidth: icon.implicitWidth + text.width + text.anchors.leftMargin
-        implicitHeight: Math.max(icon.implicitHeight, text.implicitHeight)
+        Layout.fillWidth: true
+        implicitWidth: iconSlot.implicitWidth + textItem.implicitWidth + textItem.anchors.leftMargin
+        implicitHeight: Math.max(iconSlot.implicitHeight, textItem.implicitHeight)
 
-        MaterialIcon {
-            id: icon
+        Item {
+            id: iconSlot
 
             anchors.left: parent.left
-            anchors.leftMargin: (Tokens.sizes.dashboard.infoIconSize - implicitWidth) / 2
+            anchors.verticalCenter: parent.verticalCenter
 
-            fill: 1
-            text: line.icon
-            color: line.colour
-            font.pointSize: Tokens.font.size.normal
+            implicitWidth: Tokens.sizes.dashboard.infoIconSize
+            implicitHeight: Math.max(materialIcon.implicitHeight, colouredIcon.implicitHeight)
+
+            ColouredIcon {
+                id: colouredIcon
+
+                anchors.centerIn: parent
+                visible: line.iconSource.length > 0
+                source: line.iconSource
+                implicitSize: Math.floor(Tokens.font.size.normal * 1.25)
+                colour: line.colour
+            }
+
+            MaterialIcon {
+                id: materialIcon
+
+                anchors.centerIn: parent
+                visible: line.iconSource.length === 0
+                fill: 1
+                text: line.icon
+                color: line.colour
+                font.pointSize: Tokens.font.size.normal
+            }
         }
 
         StyledText {
-            id: text
+            id: textItem
 
-            anchors.verticalCenter: icon.verticalCenter
-            anchors.left: icon.right
-            anchors.leftMargin: icon.anchors.leftMargin
-            text: `:  ${line.text}`
-            font.pointSize: Tokens.font.size.normal
+            anchors.verticalCenter: iconSlot.verticalCenter
+            anchors.left: iconSlot.right
+            anchors.leftMargin: Tokens.spacing.small
+            text: line.text
+            color: Colours.palette.m3onSurfaceVariant
+            font.pointSize: Tokens.font.size.small
 
-            width: Tokens.sizes.dashboard.infoWidth
+            width: Math.max(0, line.width - iconSlot.width - anchors.leftMargin)
             elide: Text.ElideRight
         }
     }

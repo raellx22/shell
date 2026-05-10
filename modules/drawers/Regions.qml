@@ -34,25 +34,9 @@ Region {
     }
 
     R {
-        id: sessionRegion
-
-        panel: root.panels.sessionWrapper
-        x: root.win.width - width
-        width: panel.width * (1 - root.panels.session.offsetScale) + root.borderThickness + sidebarRegion.width
-    }
-
-    R {
-        id: sidebarRegion
-
-        panel: root.panels.sidebar
-        x: root.win.width - width
-        width: panel.width * (1 - root.panels.sidebar.offsetScale) + root.borderThickness
-    }
-
-    R {
         panel: root.panels.osdWrapper
         x: root.win.width - width
-        width: panel.width * (1 - root.panels.osd.offsetScale) + root.borderThickness + sessionRegion.width
+        width: panel.width * (1 - root.panels.osd.offsetScale) + root.borderThickness
     }
 
     R {
@@ -62,9 +46,11 @@ Region {
     }
 
     R {
-        panel: root.panels.utilities
+        panel: root.panels.mediaPlayer
+        x: root.win.width - width
         y: root.win.height - height
-        height: panel.height * (1 - root.panels.utilities.offsetScale) + root.borderThickness
+        width: panel.width + root.borderThickness
+        height: panel.height + root.borderThickness
     }
 
     R {

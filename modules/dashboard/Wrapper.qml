@@ -16,15 +16,24 @@ Item {
     readonly property DashboardState dashState: DashboardState {
         reloadableId: "dashboardState"
     }
+    readonly property string defaultProfileGif: "root:/assets/bongocat.gif"
     readonly property FileDialog facePicker: FileDialog {
-        title: qsTr("Select a profile picture")
-        filterLabel: qsTr("Image files")
-        filters: Images.validImageExtensions
+        title: qsTr("Selecionar imagem de perfil")
+        filterLabel: qsTr("Imagens e GIFs")
+        filters: ["jpg", "jpeg", "png", "webp", "tif", "tiff", "svg", "gif"]
         onAccepted: path => {
+            const lowerPath = path.toLowerCase();
+            if (lowerPath.endsWith(".gif") || lowerPath.endsWith(".webp")) {
+                GlobalConfig.paths.mediaGif = path;
+                Quickshell.execDetached(["notify-send", "-a", "caelestia-shell", "-u", "low", "-h", `STRING:image-path:${path}`, "GIF de perfil alterado", `GIF de perfil alterado para ${Paths.shortenHome(path)}`]);
+                return;
+            }
+
+            GlobalConfig.paths.mediaGif = root.defaultProfileGif;
             if (CUtils.copyFile(Qt.resolvedUrl(path), Qt.resolvedUrl(`${Paths.home}/.face`)))
-                Quickshell.execDetached(["notify-send", "-a", "caelestia-shell", "-u", "low", "-h", `STRING:image-path:${path}`, "Profile picture changed", `Profile picture changed to ${Paths.shortenHome(path)}`]);
+                Quickshell.execDetached(["notify-send", "-a", "caelestia-shell", "-u", "low", "-h", `STRING:image-path:${path}`, "Imagem de perfil alterada", `Imagem de perfil alterada para ${Paths.shortenHome(path)}`]);
             else
-                Quickshell.execDetached(["notify-send", "-a", "caelestia-shell", "-u", "critical", "Unable to change profile picture", `Failed to change profile picture to ${Paths.shortenHome(path)}`]);
+                Quickshell.execDetached(["notify-send", "-a", "caelestia-shell", "-u", "critical", "Falha ao alterar perfil", `Nao foi possivel alterar a imagem para ${Paths.shortenHome(path)}`]);
         }
     }
 

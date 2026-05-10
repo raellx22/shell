@@ -47,7 +47,7 @@ StyledWindow {
             return 0;
 
         const thresholds = [];
-        for (const panel of ["dashboard", "launcher", "session", "sidebar"])
+        for (const panel of ["dashboard", "launcher"])
             if (contentItem.Config[panel].enabled)
                 thresholds.push(contentItem.Config[panel].dragThreshold);
         return Math.max(...thresholds);
@@ -55,7 +55,6 @@ StyledWindow {
 
     onHasFullscreenChanged: {
         visibilities.launcher = false;
-        visibilities.session = false;
         visibilities.dashboard = false;
         panels.popouts.close();
     }
@@ -63,7 +62,7 @@ StyledWindow {
     name: "drawers"
     WlrLayershell.exclusionMode: ExclusionMode.Ignore
     WlrLayershell.layer: fsTransitionProg > 0 && contentItem.Config.general.showOverFullscreen ? WlrLayer.Overlay : WlrLayer.Top
-    WlrLayershell.keyboardFocus: visibilities.launcher || visibilities.session || panels.dashboard.needsKeyboard ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+    WlrLayershell.keyboardFocus: visibilities.launcher || panels.dashboard.needsKeyboard ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
     mask: hasFullscreen ? emptyRegion : regions
 
@@ -103,25 +102,13 @@ StyledWindow {
     HyprlandFocusGrab {
         id: focusGrab
 
-        active: (visibilities.launcher && root.contentItem.Config.launcher.enabled) || (visibilities.session && root.contentItem.Config.session.enabled) || (visibilities.sidebar && root.contentItem.Config.sidebar.enabled) || (!root.contentItem.Config.dashboard.showOnHover && visibilities.dashboard && root.contentItem.Config.dashboard.enabled) || (panels.popouts.currentName.startsWith("traymenu") && (panels.popouts.current as StackView)?.depth > 1)
+        active: (visibilities.launcher && root.contentItem.Config.launcher.enabled) || (!root.contentItem.Config.dashboard.showOnHover && visibilities.dashboard && root.contentItem.Config.dashboard.enabled) || (panels.popouts.currentName.startsWith("traymenu") && (panels.popouts.current as StackView)?.depth > 1)
         windows: [root]
         onCleared: {
             visibilities.launcher = false;
-            visibilities.session = false;
-            visibilities.sidebar = false;
             visibilities.dashboard = false;
             panels.popouts.hasCurrent = false;
             bar.closeTray();
-        }
-    }
-
-    StyledRect {
-        anchors.fill: parent
-        opacity: visibilities.session && Config.session.enabled ? 0.5 : 0
-        color: Colours.palette.m3scrim
-
-        Behavior on opacity {
-            Anim {}
         }
     }
 
@@ -172,25 +159,6 @@ StyledWindow {
         }
 
         PanelBg {
-            id: sessionBg
-
-            panel: panels.sessionWrapper
-            deformAmount: 0.2
-            x: panels.sessionWrapper.x + panels.session.x + bar.implicitWidth
-            implicitWidth: panels.session.width
-        }
-
-        PanelBg {
-            id: sidebarBg
-
-            panel: panels.sidebar
-            deformAmount: 0.03
-            implicitHeight: panel.height * (1 / rawDeformMatrix.m22) + 2
-            exclude: panels.sidebar.offsetScale > 0.08 ? [] : [utilsBg]
-            bottomLeftRadius: Math.max(0, Math.min(1, panels.sidebar.offsetScale / 0.3)) * radius
-        }
-
-        PanelBg {
             id: osdBg
 
             panel: panels.osdWrapper
@@ -206,12 +174,14 @@ StyledWindow {
         }
 
         PanelBg {
-            id: utilsBg
+            id: mediaBg
 
-            panel: panels.utilities
-            deformAmount: panels.sidebar.visible ? 0.1 : 0.15
-            exclude: panels.sidebar.offsetScale > 0.08 ? [] : [sidebarBg]
-            topLeftRadius: Math.max(0, Math.min(1, panels.sidebar.offsetScale / 0.3)) * radius
+            panel: panels.mediaPlayer
+            deformAmount: panels.mediaPlayer.expanded ? 0.16 : 0.08
+            topLeftRadius: radius
+            topRightRadius: 0
+            bottomLeftRadius: 0
+            bottomRightRadius: 0
         }
 
         PanelBg {
@@ -258,20 +228,11 @@ StyledWindow {
             bar: bar
             borderThickness: root.borderThickness
 
-            utilities.horizontalStretch: (sidebarBg.rawDeformMatrix.m11 - 1) / 2 + 1
-            utilities.deformMatrix: utilsBg.rawDeformMatrix
-
             dashboard.transform: Matrix4x4 {
                 matrix: dashBg.deformMatrix
             }
             launcher.transform: Matrix4x4 {
                 matrix: launcherBg.deformMatrix
-            }
-            session.transform: Matrix4x4 {
-                matrix: sessionBg.deformMatrix
-            }
-            sidebar.transform: Matrix4x4 {
-                matrix: sidebarBg.deformMatrix
             }
             osd.transform: Matrix4x4 {
                 matrix: osdBg.deformMatrix
@@ -279,8 +240,8 @@ StyledWindow {
             notifications.transform: Matrix4x4 {
                 matrix: notifsBg.deformMatrix
             }
-            utilities.transform: Matrix4x4 {
-                matrix: utilsBg.deformMatrix
+            mediaPlayer.transform: Matrix4x4 {
+                matrix: mediaBg.deformMatrix
             }
             popouts.transform: Matrix4x4 {
                 matrix: popoutBg.deformMatrix

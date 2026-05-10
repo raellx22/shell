@@ -110,6 +110,13 @@ Item {
         }
 
         Popout {
+            name: "power"
+            sourceComponent: PowerMenu {
+                popouts: root.popouts
+            }
+        }
+
+        Popout {
             name: "audio"
             sourceComponent: Audio {
                 popouts: root.popouts
