@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd -- "${script_dir}/.." && pwd)"
+
+build_dir="${CAELESTIA_DEPLOY_BUILD_DIR:-${repo_root}/build}"
+shell_build_dir="${CAELESTIA_DEPLOY_SHELL_BUILD_DIR:-${repo_root}/build-deploy-shell}"
+target_dir="${CAELESTIA_DEPLOY_QS_CONFIG_DIR:-${HOME}/.config/quickshell/caelestia}"
+backup_root="${CAELESTIA_DEPLOY_BACKUP_ROOT:-${HOME}/.config/quickshell}"
+timestamp="$(date +%Y%m%d-%H%M%S)"
+backup_dir="${backup_root}/caelestia.backup-${timestamp}"
+system_install=0
+
+if [[ "${1:-}" == "--system" ]]; then
+    system_install=1
+elif [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    cat <<'EOF'
+Usage: scripts/dev-deploy-local [--system]
+
+Default mode installs only the Quickshell config into
+~/.config/quickshell/caelestia and keeps the existing system Caelestia plugin.
+
+--system also installs the compiled QML plugin and Caelestia libraries via sudo.
+EOF
+    exit 0
+elif [[ "${1:-}" != "" ]]; then
+    printf 'Unknown option: %s\n' "$1" >&2
+    exit 2
+fi
+
+printf 'Deploying Caelestia shell from %s\n' "${repo_root}"
+printf 'Target Quickshell config: %s\n' "${target_dir}"
+
+mkdir -p "${backup_root}"
+
+if [[ -e "${target_dir}" || -L "${target_dir}" ]]; then
+    final_backup="${backup_dir}"
+    suffix=1
+    while [[ -e "${final_backup}" || -L "${final_backup}" ]]; do
+        final_backup="${backup_dir}.${suffix}"
+        suffix=$((suffix + 1))
+    done
+
+    printf 'Backing up existing config to %s\n' "${final_backup}"
+    mv "${target_dir}" "${final_backup}"
+fi
+
+if (( system_install )); then
+    cmake -B "${build_dir}" \
+        -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/ \
+        -DINSTALL_QSCONFDIR="${target_dir}"
+
+    sudo cmake --install "${build_dir}"
+    sudo chown -R "$(id -un):$(id -gn)" "${target_dir}"
+else
+    cmake -B "${shell_build_dir}" \
+        -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/ \
+        -DENABLE_MODULES=shell \
+        -DINSTALL_QSCONFDIR="${target_dir}"
+
+    cmake --install "${shell_build_dir}"
+fi
+
+printf 'Deploy complete.\n'
+printf 'Run with: qs -c caelestia\n'
