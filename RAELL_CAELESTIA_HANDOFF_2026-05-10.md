@@ -678,16 +678,295 @@ git diff --check
 
 Assim a proxima ferramenta entende o historico, o estado atual e o padrao de validacao antes de continuar.
 
+## Atualizacao Final da Rodada - Dashboard Paginada, Perfil GIF e Deploy Real
+
+Esta secao registra o fechamento desta rodada no mesmo dia, depois do bloco anterior. O projeto saiu do estado "lab apenas" e passou a rodar como shell principal da maquina, mantendo o repositorio como ambiente de desenvolvimento.
+
+### Commits enviados ao GitHub
+
+Branch:
+
+```sh
+raell-lab-easy-settings
+```
+
+Commits novos enviados para `origin/raell-lab-easy-settings`:
+
+```text
+286241c6 feat: add raell dashboard and settings milestone
+0a5c141a chore: add local deploy script
+```
+
+Estado apos o push:
+
+```sh
+git status --short --branch
+# ## raell-lab-easy-settings...origin/raell-lab-easy-settings
+```
+
+### Dashboard paginada
+
+Estado: implementado e validado.
+
+A dashboard deixou de usar as tabs grandes no topo. O novo modelo e um pager central:
+
+- pagina `Centro`;
+- pagina `Clima`;
+- troca por scroll;
+- indicador lateral com setas/bolinhas;
+- sem `Tabs` ocupando espaco superior;
+- animacao de largura/altura do painel conforme pagina atual.
+
+Arquivos:
+
+- `modules/dashboard/Content.qml`
+- `modules/dashboard/DashboardPager.qml`
+- `modules/dashboard/PageIndicator.qml`
+- `modules/dashboard/unified/WeatherDashboard.qml`
+
+Detalhes importantes:
+
+- `Content.qml` agora monta `dashboardPages` em vez de `dashboardTabs`.
+- `dashState.currentTab` continua sendo usado como indice da pagina.
+- `DashboardPager.qml` usa loaders sobrepostos e troca por `WheelHandler`.
+- `PageIndicator.qml` fica na lateral, nao no topo.
+- a aba antiga `WeatherTab.qml` continua no repo, mas nao e mais usada pela superficie nova.
+
+Screenshots desta etapa:
+
+```text
+/tmp/caelestia-dashboard-pager-center-v2.png
+/tmp/caelestia-dashboard-pager-weather.png
+/tmp/caelestia-dashboard-pager-final.png
+```
+
+### WeatherDashboard
+
+Estado: implementado e refinado.
+
+A antiga tab de clima foi portada para uma pagina de dashboard mais rica:
+
+- hero card de clima atual;
+- metricas de sensacao, umidade e vento;
+- previsao por hora;
+- previsao semanal;
+- ciclo do dia com arco solar;
+- refresh no card principal.
+
+Erro encontrado:
+
+- o arco do `Ciclo do dia` estava cortando a parte superior/inferior do desenho.
+
+Correcao:
+
+- aumentar a altura preferida do `SunArc`;
+- aumentar padding interno usado no calculo do canvas;
+- reposicionar o icone do sol com margem suficiente.
+
+Arquivo:
+
+- `modules/dashboard/unified/WeatherDashboard.qml`
+
+### Perfil do usuario com GIF
+
+Estado: implementado e refinado por screenshot.
+
+Objetivo: reaproveitar a configuracao antiga de GIF do dashboard como perfil animado. A opcao no Caelestia Settings foi renomeada para `GIF do perfil`.
+
+Arquivos:
+
+- `modules/dashboard/dash/User.qml`
+- `modules/dashboard/Wrapper.qml`
+- `modules/controlcenter/personal/PersonalPane.qml`
+
+Comportamento final:
+
+- o card de usuario usa `~/.face` para imagem estatica;
+- se `Config.paths.mediaGif` aponta para um GIF/WebP diferente do padrao antigo, o card usa esse arquivo como perfil animado;
+- clicar no avatar abre o seletor de arquivo do Caelestia;
+- selecionar `.gif` ou `.webp` atualiza `GlobalConfig.paths.mediaGif`;
+- selecionar imagem estatica (`png`, `jpg`, `svg`, etc.) copia para `~/.face` e reseta o GIF para o padrao;
+- o hover nao deixa icone permanente sobre a imagem;
+- o hover escurece a imagem e mostra o affordance centralizado `Trocar`.
+
+Erros cometidos e correcoes:
+
+1. Primeira versao do avatar ficou com a foto cortada ou mal encaixada.
+   - Correcao: trocar o layout do `User.qml` de `Row` dependente de implicit size para `Item` com geometria fixa e coluna de informacoes ancorada.
+
+2. O seletor aberto pelo avatar nao aceitava GIF.
+   - Causa: `Wrapper.qml` usava `Images.validImageExtensions`, que nao inclui `gif`.
+   - Correcao: filtros explicitos `["jpg", "jpeg", "png", "webp", "tif", "tiff", "svg", "gif"]`.
+
+3. O icone/badge permanente atrapalhava a imagem.
+   - Correcao: remover badge fixo e mover a acao para overlay de hover.
+
+4. O GIF aparecia quadrado dentro da box arredondada.
+   - Causa: o `AnimatedImage` preenchia a area, mas a midia nao tinha um frame interno com clipping arredondado proprio.
+   - Correcao: criar `StyledClippingRect mediaFrame` dentro do avatar, com raio interno, e colocar `AnimatedImage`/`CachingImage` dentro dele.
+   - Tambem foi trocado para `PreserveAspectCrop` para preencher melhor o frame.
+
+Screenshot final validado:
+
+```text
+/tmp/caelestia-profile-avatar-rounded.png
+```
+
+### QuickActions e hover do microfone
+
+Erro encontrado:
+
+- a toggle de microfone tremia/fechava quando o mouse passava do tile para as linhas de detalhe.
+
+Causa:
+
+- `expanded` dependia diretamente de `stateLayer.containsMouse`, que podia oscilar ao mover entre areas internas.
+
+Correcao:
+
+- adicionar `HoverHandler`;
+- adicionar `hoverOpen`;
+- adicionar `Timer closeDelay` curto;
+- manter o tile aberto durante transicao do cursor dentro do proprio componente.
+
+Arquivo:
+
+- `modules/dashboard/unified/QuickActions.qml`
+
+### Erros de QML/log durante a dashboard paginada
+
+1. `Tooltip` no `PageIndicator` gerava warnings de tokens/screen.
+   - Correcao: remover tooltips dessa area. Indicador lateral e icones ja eram autoexplicativos.
+
+2. Tentativa temporaria de adicionar `IpcHandler target: "dashboard"` em `Wrapper.qml` gerou conflito em setups multi-monitor.
+   - Erro: mais de um wrapper registrava o mesmo target IPC.
+   - Correcao: remover esse handler. Para testes, usar apenas IPC existente de drawers: `qs ipc -i <id> call drawers toggle dashboard`.
+
+3. Lab/real logs continuam podendo mostrar warnings esperados:
+   - notification server ja registrado;
+   - `wallpaper/path.txt` ausente no lab;
+   - `scheme.json` ausente no lab;
+   - temas de icone `elementary`/`gnome` ausentes;
+   - no ambiente real apareceu aviso Qt sobre `QQuickPixmapReader` e thread ao abrir dashboard. Nao foi erro QML novo nem crash.
+
+### Deploy local como shell principal
+
+Estado: concluido.
+
+Foi criado:
+
+```sh
+scripts/dev-deploy-local
+```
+
+Modo padrao:
+
+- instala somente a config QML em `~/.config/quickshell/caelestia`;
+- nao usa `sudo`;
+- reaproveita plugin/bibliotecas Caelestia ja instalados no sistema;
+- cria backup datado se `~/.config/quickshell/caelestia` ja existir.
+
+Modo opcional:
+
+```sh
+./scripts/dev-deploy-local --system
+```
+
+- tambem instala plugin/bibliotecas via `sudo cmake --install`;
+- usar apenas quando for necessario atualizar a parte compilada.
+
+Erro cometido:
+
+- primeira versao do script sempre chamava `sudo cmake --install`.
+- No Codex, isso falhou porque `sudo` precisa de TTY/senha:
+
+```text
+sudo: a terminal is required to read the password
+sudo: a password is required
+```
+
+Correcao:
+
+- alterar o script para modo padrao shell-only sem `sudo`;
+- manter `--system` para o caso de precisar de instalacao completa;
+- adicionar `build-deploy-shell/` ao `.gitignore`.
+
+Comandos usados para instalar e iniciar como shell principal:
+
+```sh
+./scripts/dev-deploy-local
+qs kill -i <id-antigo-da-caelestia-em-/etc>
+qs -c caelestia -d
+```
+
+Instancia real validada apos instalacao:
+
+```text
+c7ph39uet
+Config path: /home/raell/.config/quickshell/caelestia/shell.qml
+```
+
+Screenshot real validado:
+
+```text
+/tmp/caelestia-real-install-dashboard.png
+```
+
+Importante: o screenshot real mostrou a dashboard um pouco mais alta que a area visivel no monitor atual, com parte inferior proxima do limite. Isso nao bloqueou a instalacao, mas deve ser considerado em proximos polimentos responsivos.
+
+### Fluxo atual recomendado
+
+Para continuar desenvolvendo:
+
+```sh
+cd /home/raell/Projetos/shell
+python3 scripts/qml-lint-conventions.py
+git diff --check
+./scripts/lab-install
+./scripts/lab-run --no-install -d
+```
+
+Para publicar no GitHub:
+
+```sh
+git status --short --branch
+git add -A
+git commit -m "<mensagem>"
+git push origin raell-lab-easy-settings
+```
+
+Para instalar o estado atual do repo como shell real:
+
+```sh
+./scripts/dev-deploy-local
+qs -c caelestia -d
+```
+
+Para verificar qual shell esta ativa:
+
+```sh
+qs list --all
+```
+
+O esperado depois do deploy local e aparecer:
+
+```text
+Config path: /home/raell/.config/quickshell/caelestia/shell.qml
+```
+
 ## Ponto de Retomada Atual
 
-Estado apos esta atualizacao do handoff:
+Estado apos esta atualizacao final do handoff:
 
 - arquivo atualizado: `RAELL_CAELESTIA_HANDOFF_2026-05-10.md`;
-- ultima dashboard validada visualmente: `/tmp/caelestia-dashboard-network-final.png`;
-- ultima instancia lab validada nesta sessao: `jdrvixtet`;
-- se a instancia nao existir mais ao retomar, rode `./scripts/lab-run --no-install -d`;
-- sempre use o id atual retornado por `qs list --all` ou pelo `lab-run`;
-- nao usar `qs list --path /tmp/caelestia-test` como unica fonte, porque ele falhou no fim desta sessao em um contexto.
+- shell real instalada em `~/.config/quickshell/caelestia`;
+- instancia real validada: `c7ph39uet`;
+- ultima dashboard real validada visualmente: `/tmp/caelestia-real-install-dashboard.png`;
+- ultimo avatar/GIF validado visualmente: `/tmp/caelestia-profile-avatar-rounded.png`;
+- commits enviados: `286241c6` e `0a5c141a`;
+- se a instancia real nao existir mais ao retomar, rode `qs -c caelestia -d`;
+- se quiser trabalhar isolado, use lab com `./scripts/lab-run --no-install -d`;
+- sempre use o id atual retornado por `qs list --all` ou pelo `lab-run`.
 
 Comandos minimos para retomar:
 
@@ -696,14 +975,22 @@ cd /home/raell/Projetos/shell
 git status --short
 python3 scripts/qml-lint-conventions.py
 git diff --check
-./scripts/lab-install
-./scripts/lab-run --no-install -d
 ```
 
-Depois de subir o lab:
+Para testar isolado:
 
 ```sh
+./scripts/lab-install
+./scripts/lab-run --no-install -d
 qs ipc -i <id> call drawers toggle dashboard
 grim /tmp/caelestia-dashboard-next.png
 tail -n 180 /run/user/1000/quickshell/by-id/<id>/log.log
+```
+
+Para atualizar a shell real depois de novas mudancas:
+
+```sh
+./scripts/dev-deploy-local
+qs list --all
+qs -c caelestia -d
 ```
